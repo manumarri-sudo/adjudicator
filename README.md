@@ -1,15 +1,22 @@
 # adjudicator
 
-A 100-line Python library that adds a **judgment layer** to any AI agent.
-One decorator on a tool function and every call goes through an LLM judge
-that reads the session intent, history, and constraints, and decides whether
-the action should be allowed. Out-of-scope actions raise `BlockedAction`
-with a tamper-evident signed receipt.
+A small Python library that adds a **judgment layer** to any AI agent. One
+decorator on a tool function and every call goes through:
+
+1. **Cheap deterministic rules first** (e.g. a decommissioned agent always
+   BLOCKs without an LLM call).
+2. **A Claude Haiku judge using `tool_use` structured output** (no prose
+   parsing — the SDK enforces the verdict schema).
+3. **An HMAC-SHA256 signature binding the request and the verdict together**
+   so receipts are tamper-evident and verifiable after the fact.
+
+Out-of-scope actions raise `BlockedAction` with the signed receipt. In-scope
+actions return `{"result": ..., "receipt": ...}`.
 
 Built around the idea in [The Adjudication Gap](https://manumarri.substack.com/p/the-adjudication-gap):
 most AI agent stacks have telemetry (the "camera") and identity (the "badge"),
 but no third layer that asks, in the moment, whether the action *should* have
-been allowed given the session. That third layer is what this is.
+been allowed given the session. This is a starter for that third layer.
 
 ## Install and run
 
@@ -35,12 +42,22 @@ def refund(amount, customer_id):
     return your_real_refund_api(amount, customer_id)
 
 refund(amount=20, customer_id="c_8e4f")
-# {"result": {"refunded_usd": 20, "to": "c_8e4f"},
-#  "receipt": {"verdict": "ALLOW", "reason": "...",
-#              "signature": "9d4f218b7c...", "signed_at": "..."}}
+# {"result": {...}, "receipt": {"verdict": "ALLOW", "signature": "9d4f218b7c4a1b2e", ...}}
 
 refund(amount=50_000, customer_id="c_X")
 # raises BlockedAction with the signed BLOCK receipt
+```
+
+## Verifying receipts later
+
+The signature binds `(request, verdict)` so neither can be tampered with after
+the fact without breaking it. Re-verify any stored receipt:
+
+```python
+from adjudicator import verify_receipt
+
+ok = verify_receipt(stored_receipt, original_request, secret=YOUR_SECRET)
+# True if the receipt is intact, False if anything was modified
 ```
 
 ## What it does, plainly
@@ -53,14 +70,12 @@ For every tool call, the judge sees five things:
 4. **Agent identity** — the agent's id, role scope, and lifecycle status
 5. **Constraints** — any hard caps or policies set for this session
 
-It returns one of three verdicts:
+It returns one of three verdicts via the `submit_verdict` tool (structured
+output, never free prose):
 
 - **ALLOW** — action is inside session intent and constraints
 - **BLOCK** — action is outside intent or breaks a constraint
 - **ALLOW_AS_REFUSAL** — the agent is choosing not to act (e.g. refusing to fabricate data)
-
-The receipt is signed with HMAC-SHA256 over the *(request, verdict)* pair, so
-neither can be tampered with after the fact without breaking the signature.
 
 ## Why this exists
 
@@ -70,41 +85,32 @@ Three checks happen around any AI agent action:
 2. **The badge** — is this agent who they say? OAuth, agent identity, role checks.
 3. **The bank manager** — was *this* allowed *right now*? Session-aware adjudication.
 
-Layers 1 and 2 are well-funded categories. Layer 3 is the gap. This library is
-a 100-line answer to layer 3, suitable for dropping into your own agent stack.
+Layers 1 and 2 are well-funded categories. Layer 3 is the gap. This library
+is a small starter for layer 3, suitable for dropping into your own agent stack.
 
-It is not a replacement for real governance tooling (Credo AI, Trustible,
-ModelOp, etc.). It is the smallest credible thing you can run in production
-*today*, while you decide what your real governance posture looks like.
-
-## What this gets you on paper
-
-- **EU AI Act, Article 14** (real human oversight, enforceable from August 2, 2026):
-  every BLOCKED action routes to a human, with a tamper-evident receipt.
-- **EU AI Act, Article 12** (logging): the receipt *is* the log.
-- **NIST AI RMF, GV-1.4 / MS-2.5**: oversight policy that runs at the moment of
-  action, not just on paper.
-- **SOC 2 Trust Services, CC7.2**: anomaly detection that fires before damage,
-  not after.
-
-It does **not** replace your overall risk register, your model cards, your
-red-team work, or your incident response plan. It plugs the specific gap
-between "tool was called" and "tool should have been called."
+It is not a replacement for serious runtime guardrail work. For that, look at
+[Meta LlamaFirewall](https://meta-llama.github.io/PurpleLlama/LlamaFirewall/),
+[NVIDIA NeMo Guardrails](https://github.com/NVIDIA-NeMo/Guardrails), or
+[Invariant Labs](https://github.com/invariantlabs-ai/invariant). Those are
+more battle-tested than what's here.
 
 ## Limits and honest caveats
 
-- The judge is an LLM. It can be fooled by adversarial inputs in the session
-  history. Treat it like any classifier in front of high-stakes actions.
-- HMAC signing proves the verdict came from a process that knows your secret.
-  It does not prove the verdict came from a specific judge model. If you need
-  that, swap to ECDSA signing with a hardware-backed key.
-- The default model (`claude-haiku-4-5`) is the cheap fast option. For
-  high-stakes flows (large dollar amounts, irreversible actions), pin to a
-  larger model and add a second-judge confirmation.
-- The `protect` decorator keeps history in memory per process. For real
-  multi-process deployments, replace with a session store (Redis, Postgres)
-  and pass `session_history` into `adjudicate()` directly.
-- This is a starting point, not a finished system. Read the 100 lines of code
+- **The judge is an LLM.** It can hallucinate, drift, or be jailbroken via
+  prompt injection in the session history. The deterministic rules layer above
+  it catches the universal cases (decommissioned agent), but you should add
+  your own deterministic rules for high-stakes actions in your application
+  code, BEFORE calling `adjudicate()`.
+- **HMAC signing proves the verdict came from a process that knows your secret.**
+  It does not prove the verdict came from a specific judge model. For that,
+  swap to ECDSA signing with a hardware-backed key.
+- **The default model (`claude-haiku-4-5`)** is the cheap fast option. For
+  high-stakes flows, pin to a larger model and consider running two judges and
+  requiring agreement (multi-judge consensus).
+- **The `protect` decorator keeps history in memory per process.** For
+  multi-process or multi-tenant deployments, replace with a session store
+  (Redis, Postgres) and pass `session_history` into `adjudicate()` directly.
+- **This is a starting point, not a finished system.** Read all 200 lines
   before you ship it.
 
 ## License
