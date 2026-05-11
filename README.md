@@ -6,7 +6,7 @@ decorator on a tool function and every call goes through:
 1. **Cheap deterministic rules first** (e.g. a decommissioned agent always
    BLOCKs without an LLM call).
 2. **A Claude Haiku judge using `tool_use` structured output** (no prose
-   parsing — the SDK enforces the verdict schema).
+   parsing: the SDK enforces the verdict schema).
 3. **An HMAC-SHA256 signature binding the request and the verdict together**
    so receipts are tamper-evident and verifiable after the fact.
 
@@ -64,26 +64,26 @@ ok = verify_receipt(stored_receipt, original_request, secret=YOUR_SECRET)
 
 For every tool call, the judge sees five things:
 
-1. **Session intent** — what the human asked the agent to do, in one sentence
-2. **Session history** — every action the agent has already taken in this session
-3. **Proposed action** — the tool call the agent wants to make right now
-4. **Agent identity** — the agent's id, role scope, and lifecycle status
-5. **Constraints** — any hard caps or policies set for this session
+1. **Session intent**: what the human asked the agent to do, in one sentence
+2. **Session history**: every action the agent has already taken in this session
+3. **Proposed action**: the tool call the agent wants to make right now
+4. **Agent identity**: the agent's id, role scope, and lifecycle status
+5. **Constraints**: any hard caps or policies set for this session
 
 It returns one of three verdicts via the `submit_verdict` tool (structured
 output, never free prose):
 
-- **ALLOW** — action is inside session intent and constraints
-- **BLOCK** — action is outside intent or breaks a constraint
-- **ALLOW_AS_REFUSAL** — the agent is choosing not to act (e.g. refusing to fabricate data)
+- **ALLOW**: action is inside session intent and constraints
+- **BLOCK**: action is outside intent or breaks a constraint
+- **ALLOW_AS_REFUSAL**: the agent is choosing not to act (e.g. refusing to fabricate data)
 
 ## Why this exists
 
 Three checks happen around any AI agent action:
 
-1. **The camera** — did this happen? Telemetry, OpenTelemetry GenAI, audit logs.
-2. **The badge** — is this agent who they say? OAuth, agent identity, role checks.
-3. **The bank manager** — was *this* allowed *right now*? Session-aware adjudication.
+1. **The camera**: did this happen? Telemetry, OpenTelemetry GenAI, audit logs.
+2. **The badge**: is this agent who they say? OAuth, agent identity, role checks.
+3. **The bank manager**: was *this* allowed *right now*? Session-aware adjudication.
 
 Layers 1 and 2 are well-funded categories. Layer 3 is the gap. This library
 is a small starter for layer 3, suitable for dropping into your own agent stack.
