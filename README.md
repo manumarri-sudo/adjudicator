@@ -127,3 +127,7 @@ underlying argument, the post is here:
 
 Maintained by [Manu Marri](https://manumarri.substack.com) · part of
 [Loomiq](https://loomiq.com)'s open work on AI agent trust infrastructure.
+
+---
+
+Built with assistance from Claude (Anthropic).
