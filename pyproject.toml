@@ -1,0 +1,36 @@
+[project]
+name = "adjudicator"
+version = "0.1.0"
+description = "A small Python library that adds a Claude Haiku judgment layer + HMAC-signed receipts to any AI agent tool."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Manu Marri" }]
+keywords = ["llm", "ai-agent", "agent-security", "tool-use", "audit", "trust-infrastructure"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Security",
+]
+dependencies = [
+  "anthropic>=0.50.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/manumarri-sudo/adjudicator"
+Substack = "https://manumarri.substack.com/p/the-adjudication-gap"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["adjudicator"]
